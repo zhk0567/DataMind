@@ -132,7 +132,7 @@ class MainWindow:
                     self.pages[page_key].on_data_changed()
                     # 如果数据更新成功，再次更新页面
                     self.page.update()
-                except Exception as e:
-                    # 如果更新失败，记录错误但不影响页面显示
-                    print(f"Warning: Failed to update page data: {e}")
+                except Exception:
+                    # 如果更新失败，忽略错误但不影响页面显示
+                    pass
 

@@ -69,7 +69,7 @@ class VisualizationPage:
             ],
             spacing=0,
             expand=True,
-            scroll=ft.ScrollMode.AUTO,
+            scroll=ft.ScrollMode.ADAPTIVE,
         )
         
         return ft.Container(
@@ -103,7 +103,7 @@ class VisualizationPage:
                 ),
             ],
             spacing=SPACING['md'],
-            scroll=ft.ScrollMode.AUTO,
+            scroll=ft.ScrollMode.ADAPTIVE,
         )
         
         # 生成按钮
@@ -436,7 +436,7 @@ class VisualizationPage:
         # 更新显示区域
         self.chart_display.content = ft.Column(
             controls=[chart_image],
-            scroll=ft.ScrollMode.AUTO,
+            scroll=ft.ScrollMode.ADAPTIVE,
             expand=True,
         )
         

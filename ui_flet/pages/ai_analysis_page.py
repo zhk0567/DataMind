@@ -126,7 +126,7 @@ class AIAnalysisPage:
             ],
             spacing=0,
             expand=True,
-            scroll=ft.ScrollMode.AUTO,
+            scroll=ft.ScrollMode.ADAPTIVE,
         )
         
         return ft.Container(

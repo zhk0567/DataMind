@@ -145,7 +145,7 @@ class HomePage:
             ],
             spacing=0,
             expand=True,
-            scroll=ft.ScrollMode.AUTO,
+            scroll=ft.ScrollMode.ADAPTIVE,
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,  # 水平居中
         )
         

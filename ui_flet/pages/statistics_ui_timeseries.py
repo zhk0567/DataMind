@@ -1,6 +1,5 @@
-﻿"""
-统计分析页面 - UI控制创建方法
-将_create_*方法提取到此模块
+"""
+统计分析页面 - 时间序列分析UI控制
 """
 import flet as ft
 import pandas as pd
@@ -9,23 +8,31 @@ from ui_flet.styles import FLUENT_COLORS, SPACING, FONT_SIZES
 
 
 class StatisticsUITimeseriesMixin:
-    """UI控制创建方法Mixin - timeseries"""
+    """时间序列分析UI控制Mixin"""
 
     def _create_trend_seasonality_controls(self, df):
-        """创建趋势与季节性分析控�?""
+        """创建趋势与季节性分析控制"""
         # 检查是否有时间类型的列
         time_cols = []
         value_cols = df.select_dtypes(include=['number']).columns.tolist()
         
         # 尝试识别时间列（datetime类型或可能是日期的字符串列）
+        import warnings
         for col in df.columns:
             if df[col].dtype == 'datetime64[ns]':
                 time_cols.append(col)
             elif df[col].dtype == 'object':
-                # 尝试解析为日�?
+                # 尝试解析为日期，抑制格式推断警告
                 try:
-                    pd.to_datetime(df[col].head(10))
-                    time_cols.append(col)
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore")
+                        # 使用 errors='coerce' 和 format='mixed' 来避免警告
+                        test_data = df[col].head(10).dropna()
+                        if len(test_data) > 0:
+                            parsed = pd.to_datetime(test_data, errors='coerce', format='mixed')
+                            # 如果至少有一半的数据能成功解析为日期，则认为这是时间列
+                            if parsed.notna().sum() >= len(test_data) * 0.5:
+                                time_cols.append(col)
                 except:
                     pass
         
@@ -50,7 +57,7 @@ class StatisticsUITimeseriesMixin:
             return
         
         time_dropdown = FluentDropdown(
-            label="时间�?,
+            label="时间列",
             options=[ft.dropdown.Option(col) for col in time_cols],
             value=time_cols[0] if time_cols else None,
             width=380,
@@ -66,7 +73,7 @@ class StatisticsUITimeseriesMixin:
         self.trend_value_dropdown = value_dropdown
         
         btn_analyze = FluentButton(
-            text="开始分�?,
+            text="开始分析",
             on_click=self._run_trend_seasonality,
             bg_color=FLUENT_COLORS['primary'],
             width=380,
@@ -125,7 +132,7 @@ class StatisticsUITimeseriesMixin:
         self.arima_q_field = q_field
         
         btn_analyze = FluentButton(
-            text="开始分�?,
+            text="开始分析",
             on_click=self._run_arima,
             bg_color=FLUENT_COLORS['primary'],
             width=380,
@@ -137,7 +144,8 @@ class StatisticsUITimeseriesMixin:
             ft.Text(
                 "ARIMA参数 (p, d, q):",
                 size=FONT_SIZES['md'],
-                weight=ft.FontWeight.BOLD
+                weight=ft.FontWeight.BOLD,
+                color=FLUENT_COLORS['text_primary']
             ),
             p_field,
             ft.Container(height=SPACING['sm']),
@@ -174,7 +182,7 @@ class StatisticsUITimeseriesMixin:
         trend_dropdown = FluentDropdown(
             label="趋势类型",
             options=[
-                ft.dropdown.Option("", "�?),
+                ft.dropdown.Option("", ""),
                 ft.dropdown.Option("add", "加法"),
                 ft.dropdown.Option("mul", "乘法"),
             ],
@@ -184,9 +192,9 @@ class StatisticsUITimeseriesMixin:
         self.es_trend_dropdown = trend_dropdown
         
         seasonal_dropdown = FluentDropdown(
-            label="季节性类�?,
+            label="季节性类型",
             options=[
-                ft.dropdown.Option("", "�?),
+                ft.dropdown.Option("", ""),
                 ft.dropdown.Option("add", "加法"),
                 ft.dropdown.Option("mul", "乘法"),
             ],
@@ -203,7 +211,7 @@ class StatisticsUITimeseriesMixin:
         self.es_seasonal_periods_field = seasonal_periods_field
         
         btn_analyze = FluentButton(
-            text="开始分�?,
+            text="开始分析",
             on_click=self._run_exponential_smoothing,
             bg_color=FLUENT_COLORS['primary'],
             width=380,
@@ -221,4 +229,3 @@ class StatisticsUITimeseriesMixin:
             btn_analyze,
         ])
     
-

@@ -4,6 +4,9 @@
 """
 import pandas as pd
 import numpy as np
+import matplotlib
+# 设置非交互式后端，避免弹出新窗口
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from typing import List, Optional, Dict, Any
 from scipy import stats

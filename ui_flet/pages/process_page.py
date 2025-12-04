@@ -309,6 +309,7 @@ class ProcessPage(ProcessDataHandlerMixin):
             spacing=0,
             scroll=ft.ScrollMode.ADAPTIVE,
             expand=True,
+            horizontal_alignment=ft.CrossAxisAlignment.START,
         )
         
         # FluentCard
@@ -321,6 +322,7 @@ class ProcessPage(ProcessDataHandlerMixin):
         return ft.Container(
             content=self.preview_card,
             expand=True,
+            clip_behavior=ft.ClipBehavior.NONE,  # 允许内容溢出以显示滚动条
         )
     
     def _on_missing_method_changed(self, e):

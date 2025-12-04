@@ -4,6 +4,9 @@
 """
 import flet as ft
 import pandas as pd
+import matplotlib
+# 设置非交互式后端，避免弹出新窗口
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import io
 import base64
@@ -79,10 +82,11 @@ class VisualizationPage:
     
     def _create_control_panel(self):
         """创建控制面板 - 统一样式"""
-        # 图表类型
+        # 图表类型 - 扩展更多图表类型
         chart_types = [
-            "柱状图", "分组柱状图", "折线图", "散点图",
-            "饼图", "箱线图", "直方图", "热力图",
+            "柱状图", "分组柱状图", "堆叠柱状图", "折线图", "面积图", "堆叠面积图",
+            "散点图", "气泡图", "饼图", "箱线图", "小提琴图", "直方图", "密度图",
+            "热力图", "Q-Q图", "P-P图", "残差图",
         ]
         
         self.chart_type_dropdown = FluentDropdown(
@@ -208,7 +212,9 @@ class VisualizationPage:
                     color=FLUENT_COLORS['text_primary']
                 )
             )
-            # 不调用 update()，由页面统一更新
+            self.vars_area.update()
+            if hasattr(self.main_window, 'page'):
+                self.main_window.page.update()
             return
         
         df = self.main_window.processed_data
@@ -218,7 +224,7 @@ class VisualizationPage:
         categorical_cols = df.select_dtypes(include=['object']).columns.tolist()
         
         # 根据图表类型创建变量选择控件
-        if chart_type in ["柱状图", "分组柱状图"]:
+        if chart_type in ["柱状图", "分组柱状图", "堆叠柱状图"]:
             if categorical_cols:
                 x_dropdown = FluentDropdown(
                     label="分类变量（X轴）",
@@ -238,8 +244,18 @@ class VisualizationPage:
                 )
                 self.y_var_dropdown = y_dropdown
                 self.vars_area.controls.append(y_dropdown)
+            
+            if chart_type in ["分组柱状图", "堆叠柱状图"] and categorical_cols:
+                group_dropdown = FluentDropdown(
+                    label="分组变量",
+                    options=[ft.dropdown.Option(col) for col in categorical_cols],
+                    value=categorical_cols[1] if len(categorical_cols) > 1 else categorical_cols[0],
+                    width=350,
+                )
+                self.group_var_dropdown = group_dropdown
+                self.vars_area.controls.append(group_dropdown)
         
-        elif chart_type in ["折线图", "散点图"]:
+        elif chart_type in ["折线图", "面积图", "堆叠面积图", "散点图"]:
             if len(numeric_cols) >= 2:
                 x_dropdown = FluentDropdown(
                     label="X变量",
@@ -258,6 +274,60 @@ class VisualizationPage:
                 )
                 self.y_var_dropdown = y_dropdown
                 self.vars_area.controls.append(y_dropdown)
+            
+            if chart_type in ["面积图", "堆叠面积图"] and len(numeric_cols) >= 2:
+                # 多Y变量选择（复选框）
+                y_checkboxes = ft.Column(
+                    controls=[
+                        ft.Row(
+                            controls=[
+                                ft.Checkbox(value=(i < 2)),
+                                ft.Text(col, size=FONT_SIZES['sm'], color=FLUENT_COLORS['text_primary'])
+                            ],
+                            spacing=SPACING['xs'],
+                            tight=True,
+                        )
+                        for i, col in enumerate(numeric_cols[:5])
+                    ],
+                    spacing=SPACING['xs'],
+                )
+                for i, row in enumerate(y_checkboxes.controls):
+                    row.label_text = numeric_cols[i]
+                    row.checkbox = row.controls[0]
+                self.y_vars_checkboxes = y_checkboxes
+                self.vars_area.controls.append(
+                    ft.Text("Y变量（可多选）", size=FONT_SIZES['sm'], color=FLUENT_COLORS['text_primary'], weight=ft.FontWeight.BOLD)
+                )
+                self.vars_area.controls.append(y_checkboxes)
+        
+        elif chart_type == "气泡图":
+            if len(numeric_cols) >= 3:
+                x_dropdown = FluentDropdown(
+                    label="X变量",
+                    options=[ft.dropdown.Option(col) for col in numeric_cols],
+                    value=numeric_cols[0],
+                    width=350,
+                )
+                self.x_var_dropdown = x_dropdown
+                self.vars_area.controls.append(x_dropdown)
+                
+                y_dropdown = FluentDropdown(
+                    label="Y变量",
+                    options=[ft.dropdown.Option(col) for col in numeric_cols],
+                    value=numeric_cols[1] if len(numeric_cols) > 1 else None,
+                    width=350,
+                )
+                self.y_var_dropdown = y_dropdown
+                self.vars_area.controls.append(y_dropdown)
+                
+                size_dropdown = FluentDropdown(
+                    label="大小变量",
+                    options=[ft.dropdown.Option(col) for col in numeric_cols],
+                    value=numeric_cols[2] if len(numeric_cols) > 2 else None,
+                    width=350,
+                )
+                self.size_var_dropdown = size_dropdown
+                self.vars_area.controls.append(size_dropdown)
         
         elif chart_type == "饼图":
             if categorical_cols:
@@ -280,7 +350,7 @@ class VisualizationPage:
                 self.val_var_dropdown = val_dropdown
                 self.vars_area.controls.append(val_dropdown)
         
-        elif chart_type in ["箱线图", "直方图"]:
+        elif chart_type in ["箱线图", "小提琴图", "直方图", "密度图", "Q-Q图", "P-P图"]:
             if numeric_cols:
                 var_dropdown = FluentDropdown(
                     label="变量",
@@ -290,6 +360,46 @@ class VisualizationPage:
                 )
                 self.var_dropdown = var_dropdown
                 self.vars_area.controls.append(var_dropdown)
+        
+        elif chart_type == "热力图":
+            if len(numeric_cols) >= 2:
+                # 多变量选择（复选框）
+                var_checkboxes = ft.Column(
+                    controls=[
+                        ft.Row(
+                            controls=[
+                                ft.Checkbox(value=True),
+                                ft.Text(col, size=FONT_SIZES['sm'], color=FLUENT_COLORS['text_primary'])
+                            ],
+                            spacing=SPACING['xs'],
+                            tight=True,
+                        )
+                        for col in numeric_cols[:10]
+                    ],
+                    spacing=SPACING['xs'],
+                )
+                for i, row in enumerate(var_checkboxes.controls):
+                    row.label_text = numeric_cols[i]
+                    row.checkbox = row.controls[0]
+                self.heatmap_vars_checkboxes = var_checkboxes
+                self.vars_area.controls.append(
+                    ft.Text("变量（至少2个，可多选）", size=FONT_SIZES['sm'], color=FLUENT_COLORS['text_primary'], weight=ft.FontWeight.BOLD)
+                )
+                self.vars_area.controls.append(var_checkboxes)
+        
+        elif chart_type == "残差图":
+            self.vars_area.controls.append(
+                ft.Text(
+                    "残差图需要从回归分析结果中生成",
+                    size=FONT_SIZES['sm'],
+                    color=FLUENT_COLORS['text_secondary']
+                )
+            )
+        
+        # 更新UI
+        self.vars_area.update()
+        if hasattr(self.main_window, 'page'):
+            self.main_window.page.update()
     
     def _generate_chart(self, e):
         """生成图表"""
@@ -328,28 +438,54 @@ class VisualizationPage:
                 if hasattr(self, 'x_var_dropdown') and hasattr(self, 'y_var_dropdown'):
                     x_col = self.x_var_dropdown.value
                     y_col = self.y_var_dropdown.value
-                    df.groupby(x_col)[y_col].mean().plot(kind='bar', ax=ax)
-                    ax.set_xlabel(x_col)
-                    ax.set_ylabel(y_col)
-                    ax.set_title(f"{y_col} by {x_col}")
+                    self.basic_charts.create_bar_chart(df, x_col, y_col, chart_type='grouped', ax=ax)
+            
+            elif chart_type == "分组柱状图":
+                if hasattr(self, 'x_var_dropdown') and hasattr(self, 'y_var_dropdown') and hasattr(self, 'group_var_dropdown'):
+                    x_col = self.x_var_dropdown.value
+                    y_col = self.y_var_dropdown.value
+                    group_col = self.group_var_dropdown.value
+                    self.basic_charts.create_bar_chart(df, x_col, y_col, group_col, chart_type='grouped', ax=ax)
+            
+            elif chart_type == "堆叠柱状图":
+                if hasattr(self, 'x_var_dropdown') and hasattr(self, 'y_var_dropdown') and hasattr(self, 'group_var_dropdown'):
+                    x_col = self.x_var_dropdown.value
+                    y_col = self.y_var_dropdown.value
+                    group_col = self.group_var_dropdown.value
+                    self.basic_charts.create_bar_chart(df, x_col, y_col, group_col, chart_type='stacked', ax=ax)
             
             elif chart_type == "折线图":
                 if hasattr(self, 'x_var_dropdown') and hasattr(self, 'y_var_dropdown'):
                     x_col = self.x_var_dropdown.value
                     y_col = self.y_var_dropdown.value
-                    df.plot(x=x_col, y=y_col, kind='line', ax=ax, marker='o')
-                    ax.set_xlabel(x_col)
-                    ax.set_ylabel(y_col)
-                    ax.set_title(f"{y_col} vs {x_col}")
+                    self.basic_charts.create_line_chart(df, x_col, [y_col], markers=True, ax=ax)
+            
+            elif chart_type == "面积图":
+                if hasattr(self, 'x_var_dropdown') and hasattr(self, 'y_vars_checkboxes'):
+                    x_col = self.x_var_dropdown.value
+                    y_cols = [row.label_text for row in self.y_vars_checkboxes.controls if hasattr(row, 'checkbox') and row.checkbox.value]
+                    if y_cols:
+                        self.basic_charts.create_line_chart(df, x_col, y_cols, chart_type='area', ax=ax)
+            
+            elif chart_type == "堆叠面积图":
+                if hasattr(self, 'x_var_dropdown') and hasattr(self, 'y_vars_checkboxes'):
+                    x_col = self.x_var_dropdown.value
+                    y_cols = [row.label_text for row in self.y_vars_checkboxes.controls if hasattr(row, 'checkbox') and row.checkbox.value]
+                    if y_cols:
+                        self.basic_charts.create_line_chart(df, x_col, y_cols, chart_type='stacked_area', ax=ax)
             
             elif chart_type == "散点图":
                 if hasattr(self, 'x_var_dropdown') and hasattr(self, 'y_var_dropdown'):
                     x_col = self.x_var_dropdown.value
                     y_col = self.y_var_dropdown.value
-                    ax.scatter(df[x_col], df[y_col], alpha=0.6)
-                    ax.set_xlabel(x_col)
-                    ax.set_ylabel(y_col)
-                    ax.set_title(f"{y_col} vs {x_col}")
+                    self.basic_charts.create_scatter_chart(df, x_col, y_col, regression=False, ax=ax)
+            
+            elif chart_type == "气泡图":
+                if hasattr(self, 'x_var_dropdown') and hasattr(self, 'y_var_dropdown') and hasattr(self, 'size_var_dropdown'):
+                    x_col = self.x_var_dropdown.value
+                    y_col = self.y_var_dropdown.value
+                    size_col = self.size_var_dropdown.value
+                    self.basic_charts.create_scatter_chart(df, x_col, y_col, size_col=size_col, ax=ax)
             
             elif chart_type == "饼图":
                 if hasattr(self, 'cat_var_dropdown') and hasattr(self, 'val_var_dropdown'):
@@ -366,6 +502,17 @@ class VisualizationPage:
                     ax.set_ylabel(var_col)
                     ax.set_title(f"Boxplot of {var_col}")
             
+            elif chart_type == "小提琴图":
+                if hasattr(self, 'var_dropdown'):
+                    var_col = self.var_dropdown.value
+                    numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
+                    categorical_cols = df.select_dtypes(include=['object']).columns.tolist()
+                    if categorical_cols:
+                        group_col = categorical_cols[0]
+                        self.statistical_charts.create_violin_plot(df, group_col, var_col, ax=ax)
+                    else:
+                        raise ValueError("小提琴图需要至少一个分类变量")
+            
             elif chart_type == "直方图":
                 if hasattr(self, 'var_dropdown'):
                     var_col = self.var_dropdown.value
@@ -373,6 +520,36 @@ class VisualizationPage:
                     ax.set_xlabel(var_col)
                     ax.set_ylabel('Frequency')
                     ax.set_title(f"Histogram of {var_col}")
+            
+            elif chart_type == "密度图":
+                if hasattr(self, 'var_dropdown'):
+                    var_col = self.var_dropdown.value
+                    self.statistical_charts.create_density_plot(df, [var_col], kde=True, ax=ax)
+            
+            elif chart_type == "热力图":
+                if hasattr(self, 'heatmap_vars_checkboxes'):
+                    selected_vars = [row.label_text for row in self.heatmap_vars_checkboxes.controls 
+                                    if hasattr(row, 'checkbox') and row.checkbox.value]
+                    if len(selected_vars) >= 2:
+                        import seaborn as sns
+                        corr_data = df[selected_vars].corr()
+                        sns.heatmap(corr_data, annot=True, fmt='.2f', cmap='coolwarm', center=0, ax=ax)
+                        ax.set_title('相关性热力图')
+            
+            elif chart_type == "Q-Q图":
+                if hasattr(self, 'var_dropdown'):
+                    var_col = self.var_dropdown.value
+                    self.statistical_charts.create_qq_plot(df, var_col, dist='norm', ax=ax)
+            
+            elif chart_type == "P-P图":
+                if hasattr(self, 'var_dropdown'):
+                    var_col = self.var_dropdown.value
+                    self.statistical_charts.create_pp_plot(df, var_col, dist='norm', ax=ax)
+            
+            elif chart_type == "残差图":
+                show_snackbar(self.main_window.page, "残差图需要从回归分析结果中生成", "warning")
+                plt.close(fig)
+                return
             
             plt.tight_layout()
             

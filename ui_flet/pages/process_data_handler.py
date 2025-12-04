@@ -147,36 +147,61 @@ class ProcessDataHandlerMixin:
             return
         
         # 有数据时，显示表格
-        max_cols = min(10, len(columns))
+        # 显示所有列，不限制列数
+        max_cols = len(columns)
         max_rows = min(50, len(df))
         
-        # 创建列
-        data_columns = [
-            ft.DataColumn(
-                ft.Text(
-                    col, 
-                    size=FONT_SIZES['sm'], 
-                    weight=ft.FontWeight.BOLD,
-                    color=FLUENT_COLORS['text_primary']
+        # 创建列 - 为每列设置合适的宽度
+        data_columns = []
+        for col in columns:
+            # 计算列宽：根据列名长度和数据类型
+            col_width = max(80, min(150, len(str(col)) * 8 + 20))
+            data_columns.append(
+                ft.DataColumn(
+                    ft.Text(
+                        col, 
+                        size=FONT_SIZES['sm'], 
+                        weight=ft.FontWeight.BOLD,
+                        color=FLUENT_COLORS['text_primary']
+                    ),
+                    numeric=pd.api.types.is_numeric_dtype(df[col]) if col in df.columns else False,
                 )
             )
-            for col in columns[:max_cols]
-        ]
         
         # 创建行
         data_rows = []
         for idx, row in df.head(max_rows).iterrows():
-            cells = [
-                ft.DataCell(
-                    ft.Text(
-                        str(val)[:30] if pd.notna(val) else "", 
-                        size=FONT_SIZES['sm'],
-                        color=FLUENT_COLORS['text_primary']
+            cells = []
+            for i, val in enumerate(row):
+                # 格式化数值显示
+                if pd.api.types.is_numeric_dtype(df[columns[i]]):
+                    if pd.notna(val):
+                        # 数值类型：保留适当小数位
+                        if isinstance(val, float):
+                            display_val = f"{val:.2f}" if abs(val) < 1000 else f"{val:.0f}"
+                        else:
+                            display_val = str(val)
+                    else:
+                        display_val = ""
+                else:
+                    # 文本类型：截断过长的文本
+                    display_val = str(val)[:50] if pd.notna(val) else ""
+                
+                cells.append(
+                    ft.DataCell(
+                        ft.Text(
+                            display_val, 
+                            size=FONT_SIZES['sm'],
+                            color=FLUENT_COLORS['text_primary']
+                        )
                     )
                 )
-                for val in row[:max_cols]
-            ]
-            data_rows.append(ft.DataRow(cells=cells))
+            data_rows.append(
+                ft.DataRow(
+                    cells=cells,
+                    color=FLUENT_COLORS['bg_card']
+                )
+            )
         
         # 重新创建DataTable
         new_table = ft.DataTable(
@@ -185,6 +210,8 @@ class ProcessDataHandlerMixin:
             border=ft.border.all(1, FLUENT_COLORS['border']),
             border_radius=COMPONENT_SIZES['input_border_radius'],
             heading_row_color=FLUENT_COLORS['bg_tertiary'],
+            data_row_color={ft.ControlState.DEFAULT: FLUENT_COLORS['bg_card']},
+            bgcolor=FLUENT_COLORS['bg_card'],
             heading_text_style=ft.TextStyle(
                 size=FONT_SIZES['sm'],
                 weight=ft.FontWeight.BOLD,
@@ -195,16 +222,33 @@ class ProcessDataHandlerMixin:
                 color=FLUENT_COLORS['text_primary']
             ),
             data_row_max_height=40,
+            column_spacing=20,
+            horizontal_lines=ft.border.BorderSide(1, FLUENT_COLORS['border']),
+            vertical_lines=ft.border.BorderSide(1, FLUENT_COLORS['border']),
         )
         
         # 更新preview_table引用
         self.preview_table = new_table
         
-        # 重新创建表格容器
-        new_table_container = ft.Container(
+        # 创建可滚动的表格容器 - 使用Column包装以支持水平和垂直滚动
+        scrollable_table = ft.Container(
             content=new_table,
-            padding=SPACING['xl'],
+            padding=SPACING['md'],
             alignment=ft.alignment.top_left,
+        )
+        
+        # 外层容器，支持水平和垂直滚动
+        scrollable_row = ft.Row(
+            controls=[scrollable_table],
+            scroll=ft.ScrollMode.ADAPTIVE,
+            vertical_alignment=ft.CrossAxisAlignment.START,
+        )
+        
+        new_table_container = ft.Container(
+            content=scrollable_row,
+            expand=True,
+            alignment=ft.alignment.top_left,
+            clip_behavior=ft.ClipBehavior.NONE,  # 允许内容溢出以显示滚动条
         )
         self.preview_table_container = new_table_container
         
@@ -213,19 +257,18 @@ class ProcessDataHandlerMixin:
             self.preview_main_content.controls.clear()
             self.preview_main_content.controls.append(new_table_container)
             
+            # 更新preview_main_content的滚动设置
+            self.preview_main_content.scroll = ft.ScrollMode.ADAPTIVE
+            self.preview_main_content.horizontal_alignment = ft.CrossAxisAlignment.START
+            
             # 更新preview_card的content
             if self.preview_card is not None:
                 try:
                     if hasattr(self.preview_card, 'content') and hasattr(self.preview_card.content, 'content'):
                         column = self.preview_card.content.content
-                        if isinstance(column, ft.Column) and len(column.controls) >= 4:
-                            new_scroll_column = ft.Column(
-                                controls=[self.preview_main_content],
-                                spacing=0,
-                                scroll=ft.ScrollMode.ADAPTIVE,
-                                expand=True,
-                            )
-                            column.controls[-1] = new_scroll_column
+                        if isinstance(column, ft.Column):
+                            column.scroll = ft.ScrollMode.ADAPTIVE
+                            column.horizontal_alignment = ft.CrossAxisAlignment.START
                 except Exception:
                     pass
         
